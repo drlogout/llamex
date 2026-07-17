@@ -1,18 +1,15 @@
 defmodule Llamex do
   @moduledoc """
-  Documentation for `Llamex`.
+  Credo checks for issues commonly introduced by LLM-assisted Elixir refactors.
   """
 
-  @doc """
-  Hello world.
+  @checks [
+    Llamex.Check.NoOneLiners,
+    Llamex.Check.NoAdHocAshQueries,
+    Llamex.Check.ConsistentInterfaces,
+    Llamex.Check.NoDBWorkInMemory
+  ]
 
-  ## Examples
-
-      iex> Llamex.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
+  @doc "Returns all checks shipped by Llamex."
+  def checks, do: @checks
 end

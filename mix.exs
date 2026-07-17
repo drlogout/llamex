@@ -6,8 +6,11 @@ defmodule Llamex.MixProject do
       app: :llamex,
       version: "0.1.0",
       elixir: "~> 1.19",
+      description:
+        "Credo checks for issues commonly introduced by LLM-assisted Elixir refactorings",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: package()
     ]
   end
 
@@ -21,8 +24,15 @@ defmodule Llamex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:credo, "~> 1.7"},
+      {:ash, "~> 3.29", optional: true}
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/llamex/llamex"}
     ]
   end
 end
