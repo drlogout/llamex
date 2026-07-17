@@ -12,6 +12,36 @@ defmodule Llamex.ChecksTest do
            ]
   end
 
+  test "registers all checks through the Credo plugin entry point" do
+    exec =
+      Credo.Execution.build([])
+      |> Credo.Execution.set_initializing_plugin(Llamex.Plugin)
+      |> Llamex.Plugin.init()
+
+    plugin_config =
+      exec
+      |> Credo.Execution.get_config_files()
+      |> Enum.find(fn
+        {:plugin, Llamex.Plugin, _config} -> true
+        _ -> false
+      end)
+
+    assert {:plugin, Llamex.Plugin, config} = plugin_config
+
+    assert config =~ "{Llamex.Check.NoOneLiners, []}"
+    assert config =~ "{Llamex.Check.NoAdHocAshQueries, []}"
+    assert config =~ "{Llamex.Check.ConsistentInterfaces, []}"
+    assert config =~ "{Llamex.Check.NoDBWorkInMemory, []}"
+
+    assert {:ok, config_file} =
+             Credo.ConfigFile.read_or_default(exec, File.cwd!(), "default", false)
+
+    assert {Llamex.Check.NoOneLiners, []} in config_file.checks.extra
+    assert {Llamex.Check.NoAdHocAshQueries, []} in config_file.checks.extra
+    assert {Llamex.Check.ConsistentInterfaces, []} in config_file.checks.extra
+    assert {Llamex.Check.NoDBWorkInMemory, []} in config_file.checks.extra
+  end
+
   defp issues(check, source, params \\ []) do
     source
     |> SourceFile.parse("lib/sample.ex")

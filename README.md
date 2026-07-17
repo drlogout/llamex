@@ -23,20 +23,37 @@ def deps do
 end
 ```
 
-Then enable the checks in `.credo.exs`:
+To enable the full suite as a Credo plugin, add `Llamex.Plugin` to
+`.credo.exs`:
 
 ```elixir
 %{
   configs: [
     %{
       name: "default",
-      requires: ["./deps/llamex/lib/llamex/check/**/*.ex"],
-      checks: [
-        {Llamex.Check.NoOneLiners, []},
-        {Llamex.Check.NoAdHocAshQueries, []},
-        {Llamex.Check.ConsistentInterfaces, []},
-        {Llamex.Check.NoDBWorkInMemory, []}
+      plugins: [
+        {Llamex.Plugin, []}
       ]
+    }
+  ]
+}
+```
+
+The plugin registers all shipped checks as Credo `checks.extra` entries.
+
+To enable only selected checks, configure those modules directly instead:
+
+```elixir
+%{
+  configs: [
+    %{
+      name: "default",
+      checks: %{
+        extra: [
+          {Llamex.Check.NoOneLiners, []},
+          {Llamex.Check.NoDBWorkInMemory, []}
+        ]
+      }
     }
   ]
 }
