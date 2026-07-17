@@ -6,24 +6,46 @@ defmodule Llamex.Check.NoAdHocAshQueries do
   use Credo.Check,
     base_priority: :normal,
     category: :warning,
+    param_defaults: [skip_tests: true],
     explanations: [
-      check: "Flags direct Ash query/change APIs where domain interfaces should be used."
+      check: """
+      Ash projects should route application code through domain code interfaces instead of
+      constructing ad-hoc queries and changesets at call sites.
+
+      This check flags direct calls such as `Ash.Query.for_read/2`,
+      `Ash.Changeset.for_create/3`, `Ash.read!/1`, `Ash.create!/1`, and domain
+      interface calls that pass inline query-shaping options like `load`, `limit`,
+      `offset`, `filter`, `sort`, `query`, or `page`.
+
+      Move the query/action shape into the Ash resource action or domain interface,
+      then call that interface from web, worker, and application modules. Ash
+      modules (`use Ash.*`) are excluded. Aggregate terminal calls like
+      `Ash.count!/1` are allowed.
+      """,
+      params: [
+        skip_tests:
+          "When true, files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/` are skipped."
+      ]
     ]
 
   alias Credo.IssueMeta
-  alias Llamex.Analysis.{Ash, AST}
+  alias Llamex.Analysis.{Ash, AST, Source}
 
   @message "Avoid ad-hoc queries. Use domain interfaces instead"
 
   @impl true
   def run(source_file, params \\ []) do
-    ast = AST.ast(source_file)
-
-    if Ash.ash_implementation_module?(ast) do
+    if Source.skip_tests?(source_file, params, __MODULE__) do
       []
     else
-      ast
-      |> AST.walk(&ad_hoc_issue(&1, IssueMeta.for(source_file, params)))
+      ast = AST.ast(source_file)
+
+      if Ash.ash_implementation_module?(ast) do
+        []
+      else
+        ast
+        |> AST.walk(&ad_hoc_issue(&1, IssueMeta.for(source_file, params)))
+      end
     end
   end
 

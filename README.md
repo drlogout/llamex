@@ -23,8 +23,7 @@ def deps do
 end
 ```
 
-To enable the full suite as a Credo plugin, add `Llamex.Plugin` to
-`.credo.exs`:
+To enable the full suite as a Credo plugin, add `Llamex` to `.credo.exs`:
 
 ```elixir
 %{
@@ -32,14 +31,22 @@ To enable the full suite as a Credo plugin, add `Llamex.Plugin` to
     %{
       name: "default",
       plugins: [
-        {Llamex.Plugin, []}
+        {Llamex, []}
       ]
     }
   ]
 }
 ```
 
-The plugin registers all shipped checks as Credo `checks.extra` entries.
+The plugin injects all shipped checks after project config is resolved, so it
+works with projects that use `checks.enabled`. Test files and Mix task files are
+skipped by default. To lint those files too:
+
+```elixir
+plugins: [
+  {Llamex, [skip_tests: false]}
+]
+```
 
 To enable only selected checks, configure those modules directly instead:
 
@@ -51,13 +58,16 @@ To enable only selected checks, configure those modules directly instead:
       checks: %{
         extra: [
           {Llamex.Check.NoOneLiners, []},
-          {Llamex.Check.NoDBWorkInMemory, []}
+          {Llamex.Check.NoDBWorkInMemory, [skip_tests: false]}
         ]
       }
     }
   ]
 }
 ```
+
+Every check supports `skip_tests`, defaulting to `true`. When enabled, it skips
+files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/`.
 
 ## Checks
 
@@ -71,7 +81,15 @@ before returning a synthetic success tuple.
 
 It skips guarded or pattern-narrowing heads, rescue/catch/after bodies, and
 boundary callbacks such as `handle_event/3`, `handle_call/3`, `handle_info/2`,
-`handle_params/3`, and other `handle_*` functions.
+`handle_params/3`, web-layer `render/*` functions, and other `handle_*`
+functions. It also skips `@impl` functions.
+
+For intentional thin boundaries that are not callbacks, place this attribute
+immediately before the function:
+
+```elixir
+@llamex_one_liner_allowed true
+```
 
 Default message:
 

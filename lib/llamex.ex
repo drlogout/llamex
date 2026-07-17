@@ -3,6 +3,8 @@ defmodule Llamex do
   Credo checks for issues commonly introduced by LLM-assisted Elixir refactors.
   """
 
+  import Credo.Plugin
+
   @checks [
     Llamex.Check.NoOneLiners,
     Llamex.Check.NoAdHocAshQueries,
@@ -12,4 +14,9 @@ defmodule Llamex do
 
   @doc "Returns all checks shipped by Llamex."
   def checks, do: @checks
+
+  @doc false
+  def init(exec) do
+    prepend_task(exec, :validate_config, Llamex.Credo.AddChecks)
+  end
 end

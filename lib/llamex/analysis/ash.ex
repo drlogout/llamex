@@ -3,13 +3,6 @@ defmodule Llamex.Analysis.Ash do
 
   alias Llamex.Analysis.AST
 
-  @implementation_prefixes [
-    "Ash.Resource.",
-    "Ash.Policy.",
-    "Ash.Query.",
-    "Ash.Changeset."
-  ]
-
   @aggregate_functions [:count, :count!, :sum, :sum!, :avg, :avg!, :min, :min!, :max, :max!]
 
   @direct_execution_functions [
@@ -38,10 +31,7 @@ defmodule Llamex.Analysis.Ash do
   def ash_implementation_module?(ast) do
     ast
     |> AST.module_uses()
-    |> Enum.any?(fn
-      "Ash.Domain" -> false
-      use_name -> Enum.any?(@implementation_prefixes, &String.starts_with?(use_name, &1))
-    end)
+    |> Enum.any?(&AST.ash_module_name?/1)
   end
 
   def direct_ad_hoc_call?(node) do
@@ -119,13 +109,23 @@ defmodule Llamex.Analysis.Ash do
 
   defp db_style_function?(function) do
     name = Atom.to_string(function)
+    normalized = String.trim_trailing(name, "!")
 
-    String.starts_with?(name, "list_") or
-      String.starts_with?(name, "get_") or
-      String.starts_with?(name, "read_") or
-      String.ends_with?(name, "_for_user") or
-      String.contains?(name, "records") or
-      String.contains?(name, "books") or
-      String.ends_with?(name, "!")
+    unscoped_collection_name?(normalized) and not scoped_collection_name?(normalized)
+  end
+
+  defp unscoped_collection_name?(name) do
+    name in ["all", "list", "read"] or
+      String.starts_with?(name, "all_") or
+      String.starts_with?(name, "list_all") or
+      String.starts_with?(name, "get_all") or
+      String.starts_with?(name, "read_all") or
+      String.ends_with?(name, "_all")
+  end
+
+  defp scoped_collection_name?(name) do
+    String.contains?(name, "_for_") or
+      String.contains?(name, "_by_") or
+      String.contains?(name, "_with_")
   end
 end

@@ -6,22 +6,44 @@ defmodule Llamex.Check.ConsistentInterfaces do
   use Credo.Check,
     base_priority: :normal,
     category: :warning,
+    param_defaults: [skip_tests: true],
     explanations: [
-      check: "Flags Ash code interfaces whose names and action declarations are inconsistent."
+      check: """
+      Ash domain code interfaces are the public API for resource actions. When an
+      interface name drifts away from the action it calls, callers have to learn
+      two vocabularies for the same operation and generated API surfaces become
+      harder to audit.
+
+      This check flags `define` declarations where the interface name differs
+      from the referenced action name, for example `define :list_cards,
+      action: :search_cards`.
+
+      Prefer naming the interface after the action, or rename the resource action
+      if the interface name is the better domain term. The check does not rewrite
+      declarations because the right fix is a domain naming decision.
+      """,
+      params: [
+        skip_tests:
+          "When true, files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/` are skipped."
+      ]
     ]
 
   alias Credo.IssueMeta
-  alias Llamex.Analysis.AST
+  alias Llamex.Analysis.{AST, Source}
 
   @message "Keep interface names consistent with action names. Avoid redundant arg passing"
 
   @impl true
   def run(source_file, params \\ []) do
-    issue_meta = IssueMeta.for(source_file, params)
+    if Source.skip_tests?(source_file, params, __MODULE__) do
+      []
+    else
+      issue_meta = IssueMeta.for(source_file, params)
 
-    source_file
-    |> AST.ast()
-    |> AST.walk(&interface_issue(&1, issue_meta))
+      source_file
+      |> AST.ast()
+      |> AST.walk(&interface_issue(&1, issue_meta))
+    end
   end
 
   defp interface_issue({:define, meta, [interface, opts]}, issue_meta)

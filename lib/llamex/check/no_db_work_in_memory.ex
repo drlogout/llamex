@@ -6,30 +6,53 @@ defmodule Llamex.Check.NoDBWorkInMemory do
   use Credo.Check,
     base_priority: :high,
     category: :warning,
+    param_defaults: [skip_tests: true],
     explanations: [
-      check: "Flags Enum/List work over values traced back to Ash domain interfaces or reads."
+      check: """
+      Loading database-backed collections and then filtering, sorting, grouping, or
+      reducing them in memory hides work that should usually be expressed as an Ash
+      query, preparation, or resource action.
+
+      This check flags `Enum`, `List`, and `Stream` operations when the collection
+      can be traced back to an Ash-style domain interface or direct Ash read in the
+      current file. Findings include the traced origin when available.
+
+      Move the collection operation into the resource action/query so the database
+      can do the work. If whole-dataset in-memory work is intentional, use
+      `@llamex_db_work_in_memory_allowed true` near the module/function or disable
+      the check with Credo's normal inline disable mechanism.
+      """,
+      params: [
+        skip_tests:
+          "When true, files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/` are skipped."
+      ]
     ]
 
   alias Credo.IssueMeta
-  alias Llamex.Analysis.{Ash, AST}
+  alias Llamex.Analysis.{Ash, AST, Source}
 
   @message "Do not operate on the whole dataset in memory. Use DB queries via resources"
 
   @impl true
   def run(source_file, params \\ []) do
-    ast = AST.ast(source_file)
-
-    if AST.opt_out?(ast, :llamex_db_work_in_memory_allowed) do
+    if Source.skip_tests?(source_file, params, __MODULE__) do
       []
     else
-      issue_meta = IssueMeta.for(source_file, params)
-      aliases = AST.aliases(ast)
-      functions = AST.functions(ast)
-      helper_returns = helper_returns(functions)
+      ast = AST.ast(source_file)
 
-      functions
-      |> Enum.flat_map(&issues_for_function(&1, aliases, helper_returns, issue_meta))
-      |> Enum.uniq_by(&{&1.line_no, &1.trigger})
+      if Ash.ash_implementation_module?(ast) or
+           AST.opt_out?(ast, :llamex_db_work_in_memory_allowed) do
+        []
+      else
+        issue_meta = IssueMeta.for(source_file, params)
+        aliases = AST.aliases(ast)
+        functions = AST.functions(ast)
+        helper_returns = helper_returns(functions)
+
+        functions
+        |> Enum.flat_map(&issues_for_function(&1, aliases, helper_returns, issue_meta))
+        |> Enum.uniq_by(&{&1.line_no, &1.trigger})
+      end
     end
   end
 
