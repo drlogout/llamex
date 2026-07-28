@@ -14,8 +14,9 @@ defmodule Llamex.Check.NoAdHocAshQueries do
 
       This check flags direct calls such as `Ash.Query.for_read/2`,
       `Ash.Changeset.for_create/3`, `Ash.read!/1`, `Ash.create!/1`, and domain
-      interface calls that pass inline query-shaping options like `load`, `limit`,
-      `offset`, `filter`, `sort`, `query`, or `page`.
+      interface calls that pass inline query-shaping options like `load`,
+      `filter`, `sort`, or `query`. Pagination options (`page`, `limit`,
+      `offset`) are allowed — paging at call time is Ash's designed API.
 
       Move the query/action shape into the Ash resource action or domain interface,
       then call that interface from web, worker, and application modules. Ash

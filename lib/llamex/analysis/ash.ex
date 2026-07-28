@@ -26,7 +26,10 @@ defmodule Llamex.Analysis.Ash do
     :load!
   ]
 
-  @ad_hoc_option_keys [:load, :offset, :limit, :filter, :filters, :sort, :query, :page]
+  # Pagination options (:page, :limit, :offset) are deliberately not
+  # listed: passing a page window at call time is Ash's designed
+  # pagination API, not ad-hoc query shaping.
+  @ad_hoc_option_keys [:load, :filter, :filters, :sort, :query]
 
   def ash_implementation_module?(ast) do
     ast

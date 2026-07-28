@@ -103,8 +103,9 @@ Default severity: warning.
 
 Flags direct `Ash`, `Ash.Query`, and `Ash.Changeset` APIs in ordinary
 application modules, plus domain interface calls with inline ad-hoc query
-options such as `load`, `offset`, `limit`, `filter`, `sort`, `query`, and
-`page`.
+options such as `load`, `filter`, `sort`, and `query`. Pagination options
+(`page`, `limit`, `offset`) are allowed — paging at call time is Ash's
+designed API.
 
 It allows aggregate terminals such as `Ash.count!/1` and Ash implementation
 modules that `use Ash.Resource.*` or similar extension points.
