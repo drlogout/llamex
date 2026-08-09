@@ -1,5 +1,11 @@
 defmodule Llamex.Analysis.AST do
-  @moduledoc false
+  @moduledoc """
+  General-purpose AST traversal and inspection helpers.
+
+  These functions extract structure from Elixir AST nodes: function
+  definitions, aliases, module attributes, call identities, pipe
+  inputs, and variable assignments.
+  """
 
   alias Credo.SourceFile
 

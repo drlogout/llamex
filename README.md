@@ -1,14 +1,15 @@
 # Llamex
 
-Llamex is a Credo plugin suite for issues commonly introduced by LLM-assisted
-Elixir refactorings. The MVP ships four checks:
+Llamex is a Credo plugin suite. It detects issues that LLM-assisted Elixir
+refactors commonly introduce. The suite ships five checks:
 
 - `Llamex.Check.NoOneLiners`
 - `Llamex.Check.NoAdHocAshQueries`
 - `Llamex.Check.ConsistentInterfaces`
 - `Llamex.Check.NoDBWorkInMemory`
+- `Llamex.Check.NoAuthorizeBypass`
 
-The checks prioritize detection and useful messages. They do not perform
+The checks detect problems and show useful messages. They do not apply
 automatic fixes.
 
 ## Installation
@@ -38,9 +39,9 @@ To enable the full suite as a Credo plugin, add `Llamex` to `.credo.exs`:
 }
 ```
 
-The plugin injects all shipped checks after project config is resolved, so it
-works with projects that use `checks.enabled`. Test files and Mix task files are
-skipped by default. To lint those files too:
+The plugin injects all shipped checks after the project config loads. It
+works with projects that use `checks.enabled`. The plugin skips test files
+and Mix task files by default. To lint those files too:
 
 ```elixir
 plugins: [
@@ -48,7 +49,7 @@ plugins: [
 ]
 ```
 
-To enable only selected checks, configure those modules directly instead:
+To enable only selected checks, configure those modules directly:
 
 ```elixir
 %{
@@ -66,8 +67,8 @@ To enable only selected checks, configure those modules directly instead:
 }
 ```
 
-Every check supports `skip_tests`, defaulting to `true`. When enabled, it skips
-files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/`.
+Every check supports `skip_tests`, which defaults to `true`. When enabled, it
+skips files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/`.
 
 ## Checks
 
@@ -75,17 +76,22 @@ files under `test/`, `*_test.exs` files, and files under `lib/mix/tasks/`.
 
 Default severity: error-level priority.
 
-Flags redundant wrapper functions where the body only delegates to another
-function, assigns a delegated value and returns it, or ignores a helper result
-before returning a synthetic success tuple.
+This check flags redundant wrapper functions. It detects three patterns:
 
-It skips guarded or pattern-narrowing heads, rescue/catch/after bodies, and
-boundary callbacks such as `handle_event/3`, `handle_call/3`, `handle_info/2`,
-`handle_params/3`, web-layer `render/*` functions, and other `handle_*`
-functions. It also skips `@impl` functions.
+1. The body only delegates to another function.
+2. The body assigns a delegated value and returns it.
+3. The body ignores a helper result and returns a synthetic success tuple.
 
-For intentional thin boundaries that are not callbacks, place this attribute
-immediately before the function:
+The check skips these cases:
+
+- Guarded or pattern-narrowing heads
+- Rescue/catch/after bodies
+- Boundary callbacks: `handle_event/3`, `handle_call/3`, `handle_info/2`,
+  `handle_params/3`, web-layer `render/*`, and other `handle_*` functions
+- `@impl` functions
+
+For intentional thin boundaries that are not callbacks, add this attribute
+before the function:
 
 ```elixir
 @llamex_one_liner_allowed true
@@ -101,14 +107,15 @@ Redundant one-line wrapper. Replace with direct call
 
 Default severity: warning.
 
-Flags direct `Ash`, `Ash.Query`, and `Ash.Changeset` APIs in ordinary
-application modules, plus domain interface calls with inline ad-hoc query
-options such as `load`, `filter`, `sort`, and `query`. Pagination options
-(`page`, `limit`, `offset`) are allowed — paging at call time is Ash's
-designed API.
+This check flags direct `Ash`, `Ash.Query`, and `Ash.Changeset` API calls
+in application modules. It also flags domain interface calls that pass
+inline query options: `load`, `filter`, `sort`, or `query`.
 
-It allows aggregate terminals such as `Ash.count!/1` and Ash implementation
-modules that `use Ash.Resource.*` or similar extension points.
+Pagination options (`page`, `limit`, `offset`) are allowed. Paging at call
+time is the Ash-designed API.
+
+The check allows aggregate calls like `Ash.count!/1`. It also allows Ash
+implementation modules that `use Ash.Resource.*` or similar extension points.
 
 Default message:
 
@@ -120,8 +127,8 @@ Avoid ad-hoc queries. Use domain interfaces instead
 
 Default severity: warning.
 
-Flags Ash domain `define` declarations where the interface name differs from the
-referenced action name.
+This check flags Ash domain `define` declarations where the interface name
+differs from the referenced action name.
 
 Default message:
 
@@ -133,18 +140,18 @@ Keep interface names consistent with action names. Avoid redundant arg passing
 
 Default severity: error-level priority for proven local origins.
 
-Flags `Enum`, `List`, and `Stream` collection work when the collection can be
-traced back to an Ash-style domain interface or direct Ash read in the current
-file. Findings include the traced origin.
+This check flags `Enum`, `List`, and `Stream` collection work when the
+collection traces back to an Ash domain interface or direct Ash read. The
+trace stays within the current file. Findings include the traced origin path.
 
-Use this module attribute to opt out when whole-dataset in-memory work is
-intentional:
+To opt out when whole-dataset in-memory work is intentional, add this
+module attribute:
 
 ```elixir
 @llamex_db_work_in_memory_allowed true
 ```
 
-Credo's existing inline disable comments can also suppress findings.
+Credo inline disable comments also suppress findings.
 
 Default message:
 
@@ -152,21 +159,48 @@ Default message:
 Do not operate on the whole dataset in memory. Use DB queries via resources
 ```
 
+### NoAuthorizeBypass
+
+Default severity: warning.
+
+This check flags `authorize?: false` in Ash action calls, domain interface
+calls, and `Ash.Query`/`Ash.Changeset` calls.
+
+Actions must receive the actor that started the call. System-initiated
+actions (Oban jobs, seeds, migrations) must pass a system actor instead:
+
+```elixir
+# Do not do this:
+Support.create_ticket!(params, authorize?: false)
+
+# Do this instead:
+Support.create_ticket!(params, actor: user)
+
+# For system-initiated actions:
+Support.create_ticket!(params, actor: {system, :my_oban_job})
+```
+
+Default message:
+
+```text
+Do not use authorize?: false. Pass the actor that started the call, or
+actor: {system, :name} for system-initiated actions
+```
+
 ## Confidence Model
 
 Llamex classifies findings conservatively:
 
-- `:proven` means the source is known from local AST or reliable metadata.
-- `:likely` means the issue is strongly indicated through simple inference.
-- `:possible` means there is a plausible path but incomplete information.
+- `:proven` — the source is known from local AST or reliable metadata.
+- `:likely` — the issue is strongly indicated through simple inference.
+- `:possible` — there is a plausible path but incomplete information.
 
-The current MVP implements proven local detection and conservative AST-only
-heuristics. It fails soft when Ash/Spark metadata is unavailable.
+The current version implements proven local detection and conservative
+AST-only heuristics. It fails soft when Ash/Spark metadata is unavailable.
 
 ## Known Limitations
 
-- Cross-file tracing is intentionally shallow in the MVP.
+- Cross-file tracing is intentionally shallow.
 - Dynamic dispatch, generated code, and complex macro expansion may be skipped.
-- Ash classification is AST-first and does not require loading a full project
-  index.
+- Ash classification is AST-first. It does not require a full project index.
 - Checks do not rewrite code.

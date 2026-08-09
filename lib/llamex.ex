@@ -9,7 +9,8 @@ defmodule Llamex do
     Llamex.Check.NoOneLiners,
     Llamex.Check.NoAdHocAshQueries,
     Llamex.Check.ConsistentInterfaces,
-    Llamex.Check.NoDBWorkInMemory
+    Llamex.Check.NoDBWorkInMemory,
+    Llamex.Check.NoAuthorizeBypass
   ]
 
   @doc "Returns all checks shipped by Llamex."

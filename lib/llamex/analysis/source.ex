@@ -1,5 +1,10 @@
 defmodule Llamex.Analysis.Source do
-  @moduledoc false
+  @moduledoc """
+  Source file classification helpers.
+
+  These functions determine whether a file is a test file or a Mix
+  task file. Checks use this to skip files when `skip_tests: true`.
+  """
 
   alias Credo.Check.Params
   alias Credo.SourceFile

@@ -9,7 +9,8 @@ defmodule Llamex.ChecksTest do
              Llamex.Check.NoOneLiners,
              Llamex.Check.NoAdHocAshQueries,
              Llamex.Check.ConsistentInterfaces,
-             Llamex.Check.NoDBWorkInMemory
+             Llamex.Check.NoDBWorkInMemory,
+             Llamex.Check.NoAuthorizeBypass
            ]
   end
 
@@ -38,6 +39,7 @@ defmodule Llamex.ChecksTest do
     assert {Llamex.Check.NoAdHocAshQueries, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.ConsistentInterfaces, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.NoDBWorkInMemory, [skip_tests: true]} in exec.checks.enabled
+    assert {Llamex.Check.NoAuthorizeBypass, [skip_tests: true]} in exec.checks.enabled
   end
 
   test "plugin-level skip_tests config is propagated to injected checks" do
@@ -113,6 +115,14 @@ defmodule Llamex.ChecksTest do
        defmodule SampleTest do
          def helper do
            Things.list_things!() |> Enum.filter(& &1.active)
+         end
+       end
+       """},
+      {Llamex.Check.NoAuthorizeBypass,
+       """
+       defmodule SampleTest do
+         def helper(id) do
+           Support.get_ticket!(id, authorize?: false)
          end
        end
        """}
@@ -539,6 +549,121 @@ defmodule Llamex.ChecksTest do
       """
 
       assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
+    end
+  end
+
+  describe "NoAuthorizeBypass" do
+    test "flags authorize?: false on direct Ash calls" do
+      source = """
+      defmodule Sample do
+        def create_ticket(params) do
+          Ash.create!(changeset, authorize?: false)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert issue.message =~ "Do not use authorize?: false"
+    end
+
+    test "flags authorize?: false on Ash.Changeset calls" do
+      source = """
+      defmodule Sample do
+        def create_ticket(params) do
+          Ash.Changeset.for_create(Resource, :create, params, authorize?: false)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert issue.message =~ "Do not use authorize?: false"
+    end
+
+    test "flags authorize?: false on Ash.Query calls" do
+      source = """
+      defmodule Sample do
+        def list_tickets do
+          Ash.Query.for_read(Resource, :read, authorize?: false)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert issue.message =~ "Do not use authorize?: false"
+    end
+
+    test "flags authorize?: false on domain interface calls" do
+      source = """
+      defmodule Sample do
+        def get_ticket(id) do
+          Support.get_ticket!(id, authorize?: false)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert issue.message =~ "Do not use authorize?: false"
+    end
+
+    test "allows calls without authorize?: false" do
+      source = """
+      defmodule Sample do
+        def get_ticket(id, actor) do
+          Support.get_ticket!(id, actor: actor)
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "allows authorize?: true" do
+      source = """
+      defmodule Sample do
+        def get_ticket(id, actor) do
+          Support.get_ticket!(id, actor: actor, authorize?: true)
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "ignores local function calls with authorize?: false" do
+      source = """
+      defmodule Sample do
+        def get_ticket(id) do
+          fetch_ticket(id, authorize?: false)
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "skips test files by default" do
+      source = """
+      defmodule SampleTest do
+        def helper(id) do
+          Support.get_ticket!(id, authorize?: false)
+        end
+      end
+      """
+
+      assert [] = test_file_issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "flags authorize?: false mixed with other options" do
+      source = """
+      defmodule Sample do
+        def get_ticket(id) do
+          Support.get_ticket!(id, actor: nil, authorize?: false, load: [:comments])
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert issue.message =~ "Do not use authorize?: false"
     end
   end
 end

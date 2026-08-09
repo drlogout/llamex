@@ -1,5 +1,10 @@
 defmodule Llamex.Analysis.Ash do
-  @moduledoc false
+  @moduledoc """
+  Ash-specific AST classification helpers.
+
+  Each function inspects an AST node and returns whether it matches
+  a known Ash call pattern. No runtime Ash/Spark dependency is required.
+  """
 
   alias Llamex.Analysis.AST
 
@@ -55,6 +60,19 @@ defmodule Llamex.Analysis.Ash do
     case AST.call_identity(node) do
       %{module_name: "Ash", function: function} -> function in @aggregate_functions
       _ -> false
+    end
+  end
+
+  # Returns true when the node is a call that passes `authorize?: false`.
+  # Only matches Ash-related calls: direct Ash.* calls, Ash.Query.*,
+  # Ash.Changeset.*, or dotted-module domain interface calls.
+  def authorize_false?(node) do
+    case AST.call_identity(node) do
+      %{module_name: module_name, args: args} when is_binary(module_name) ->
+        ash_related_module?(module_name) and has_authorize_false?(args)
+
+      _ ->
+        false
     end
   end
 
@@ -130,5 +148,22 @@ defmodule Llamex.Analysis.Ash do
     String.contains?(name, "_for_") or
       String.contains?(name, "_by_") or
       String.contains?(name, "_with_")
+  end
+
+  # Any remote call (call with a module) can be Ash-related.
+  # Single-segment names like `Support` are often aliases for full
+  # domain modules like `MyApp.Support`.
+  defp ash_related_module?(module_name) do
+    is_binary(module_name) and module_name != ""
+  end
+
+  defp has_authorize_false?(args) do
+    Enum.any?(args, fn
+      opts when is_list(opts) ->
+        Keyword.keyword?(opts) and Keyword.get(opts, :authorize?) == false
+
+      _ ->
+        false
+    end)
   end
 end
