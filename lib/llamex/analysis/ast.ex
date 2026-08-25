@@ -219,17 +219,21 @@ defmodule Llamex.Analysis.AST do
   def call_to_string(expression), do: Macro.to_string(expression)
 
   def resolve_alias(module, aliases) when is_atom(module) do
-    parts = Module.split(module)
+    if String.starts_with?(Atom.to_string(module), "Elixir.") do
+      parts = Module.split(module)
 
-    case parts do
-      [single] ->
-        Map.get(aliases, String.to_atom(single), module)
+      case parts do
+        [single] ->
+          Map.get(aliases, String.to_atom(single), module)
 
-      [first | rest] ->
-        case Map.get(aliases, String.to_atom(first)) do
-          nil -> module
-          resolved -> Module.concat([resolved | rest])
-        end
+        [first | rest] ->
+          case Map.get(aliases, String.to_atom(first)) do
+            nil -> module
+            resolved -> Module.concat([resolved | rest])
+          end
+      end
+    else
+      module
     end
   end
 

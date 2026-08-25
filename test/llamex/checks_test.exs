@@ -562,6 +562,25 @@ defmodule Llamex.ChecksTest do
       assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
     end
 
+    test "handles Erlang module calls in collection pipelines" do
+      source = """
+      defmodule Sample do
+        def hash_all(chunks) do
+          chunks
+          |> Enum.reduce(:crypto.hash_init(:sha256), &:crypto.hash_update(&2, &1))
+          |> :crypto.hash_final()
+        end
+
+        def memory_values do
+          :erlang.memory()
+          |> Enum.map(fn {_key, value} -> value end)
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
+    end
+
     test "allows in-memory work inside Ash implementation modules" do
       source = """
       defmodule Sample.Calculation do
