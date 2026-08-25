@@ -8,7 +8,6 @@ defmodule Llamex do
   @checks [
     Llamex.Check.NoOneLiners,
     Llamex.Check.NoAdHocAshQueries,
-    Llamex.Check.ConsistentInterfaces,
     Llamex.Check.NoDBWorkInMemory,
     Llamex.Check.NoAuthorizeBypass,
     Llamex.Check.NoSelfInLiveViews,

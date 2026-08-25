@@ -13,15 +13,12 @@ defmodule Llamex.Check.NoAdHocAshQueries do
       constructing ad-hoc queries and changesets at call sites.
 
       This check flags direct calls such as `Ash.Query.for_read/2`,
-      `Ash.Changeset.for_create/3`, `Ash.read!/1`, `Ash.create!/1`, and domain
-      interface calls that pass inline query-shaping options like `load`,
-      `filter`, `sort`, or `query`. Pagination options (`page`, `limit`,
-      `offset`) are allowed — paging at call time is Ash's designed API.
+      `Ash.Changeset.for_create/3`, `Ash.read!/1`, and `Ash.create!/1`.
 
       Move the query/action shape into the Ash resource action or domain interface,
       then call that interface from web, worker, and application modules. Ash
       modules (`use Ash.*`) are excluded. Aggregate terminal calls like
-      `Ash.count!/1` are allowed.
+      `Ash.count!/1` and query options accepted by code interfaces are allowed.
       """,
       params: [
         skip_tests:
@@ -55,7 +52,7 @@ defmodule Llamex.Check.NoAdHocAshQueries do
       Ash.aggregate_call?(node) ->
         nil
 
-      Ash.direct_ad_hoc_call?(node) or Ash.domain_interface_with_ad_hoc_options?(node) ->
+      Ash.direct_ad_hoc_call?(node) ->
         issue_for(node, issue_meta)
 
       true ->

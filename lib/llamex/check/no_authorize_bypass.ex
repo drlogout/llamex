@@ -13,10 +13,10 @@ defmodule Llamex.Check.NoAuthorizeBypass do
       actions (Oban jobs, seeds, migrations) must pass `actor: %{system: :name}`
       or a system actor instead of `authorize?: false`.
 
-      This check flags any call that passes `authorize?: false` as a keyword
-      option. It walks up from each occurrence to verify the call is an Ash-related
-      invocation: a direct `Ash.*` call, an `Ash.Changeset.*` or `Ash.Query.*`
-      call, or a domain interface call on a dotted module.
+       This check flags calls outside Ash implementation modules that pass
+       `authorize?: false` as a keyword option. Resource action implementations,
+       changes, preparations and policy checks are already inside an Ash-managed
+       authorization boundary and are excluded.
 
       Remove `authorize?: false` and pass the real actor. For system-initiated
       actions, pass `actor: %{system: :job_name}` or a similar system marker.
@@ -37,11 +37,13 @@ defmodule Llamex.Check.NoAuthorizeBypass do
     if Source.skip_tests?(source_file, params, __MODULE__) do
       []
     else
-      issue_meta = IssueMeta.for(source_file, params)
+      ast = AST.ast(source_file)
 
-      source_file
-      |> AST.ast()
-      |> AST.walk(&authorize_bypass_issue(&1, issue_meta))
+      if Ash.ash_implementation_module?(ast) do
+        []
+      else
+        AST.walk(ast, &authorize_bypass_issue(&1, IssueMeta.for(source_file, params)))
+      end
     end
   end
 

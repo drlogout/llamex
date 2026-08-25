@@ -10,7 +10,7 @@ defmodule Llamex.Check.NoDBWorkInMemory do
     explanations: [
       check: """
       Loading database-backed collections and then filtering, sorting, grouping, or
-      reducing them in memory hides work that should usually be expressed as an Ash
+       aggregating them in memory hides work that should usually be expressed as an Ash
       query, preparation, or resource action.
 
       This check flags `Enum`, `List`, and `Stream` operations when the collection
@@ -19,8 +19,11 @@ defmodule Llamex.Check.NoDBWorkInMemory do
 
       Move the collection operation into the resource action/query so the database
       can do the work. If whole-dataset in-memory work is intentional, use
-      `@llamex_db_work_in_memory_allowed true` near the module/function or disable
-      the check with Credo's normal inline disable mechanism.
+       `@llamex_db_work_in_memory_allowed true` near the module/function or disable
+       the check with Credo's normal inline disable mechanism.
+
+       Per-record iteration and reduction are allowed because the work may involve
+       filesystems, external services or summary construction that a database cannot perform.
       """,
       params: [
         skip_tests:
@@ -87,7 +90,7 @@ defmodule Llamex.Check.NoDBWorkInMemory do
   defp collection_input(node) do
     case AST.call_identity(node) do
       %{module: module, args: [input | _]} when module in [Enum, List, Stream] ->
-        input
+        if AST.collection_call?(node), do: input
 
       _ ->
         nil

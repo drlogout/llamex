@@ -8,7 +8,6 @@ defmodule Llamex.ChecksTest do
     assert Llamex.checks() == [
              Llamex.Check.NoOneLiners,
              Llamex.Check.NoAdHocAshQueries,
-             Llamex.Check.ConsistentInterfaces,
              Llamex.Check.NoDBWorkInMemory,
              Llamex.Check.NoAuthorizeBypass,
              Llamex.Check.NoSelfInLiveViews,
@@ -39,7 +38,7 @@ defmodule Llamex.ChecksTest do
 
     assert {Llamex.Check.NoOneLiners, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.NoAdHocAshQueries, [skip_tests: true]} in exec.checks.enabled
-    assert {Llamex.Check.ConsistentInterfaces, [skip_tests: true]} in exec.checks.enabled
+    refute {Llamex.Check.ConsistentInterfaces, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.NoDBWorkInMemory, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.NoAuthorizeBypass, [skip_tests: true]} in exec.checks.enabled
     assert {Llamex.Check.NoSelfInLiveViews, [skip_tests: true]} in exec.checks.enabled
@@ -457,7 +456,7 @@ defmodule Llamex.ChecksTest do
       assert [] = issues(Llamex.Check.NoAdHocAshQueries, source)
     end
 
-    test "flags inline ad-hoc query options on domain interface calls" do
+    test "allows query options supported by domain interfaces" do
       source = """
       defmodule Sample do
         def get_records_for_user(id) do
@@ -466,13 +465,12 @@ defmodule Llamex.ChecksTest do
       end
       """
 
-      assert [issue] = issues(Llamex.Check.NoAdHocAshQueries, source)
-      assert issue.message =~ "Avoid ad-hoc queries"
+      assert [] = issues(Llamex.Check.NoAdHocAshQueries, source)
     end
   end
 
   describe "ConsistentInterfaces" do
-    test "flags interface defines whose name differs from the action" do
+    test "can opt into exact interface and action name matching" do
       source = """
       defmodule Helpdesk.Support do
         use Ash.Domain
@@ -596,6 +594,19 @@ defmodule Llamex.ChecksTest do
 
       assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
     end
+
+    test "allows per-record reduction after an Ash read" do
+      source = """
+      defmodule Sample do
+        def repair_all do
+          Helpdesk.Support.list_all_tickets!()
+          |> Enum.reduce(%{repaired: 0}, &repair_one/2)
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
+    end
   end
 
   describe "NoAuthorizeBypass" do
@@ -712,6 +723,21 @@ defmodule Llamex.ChecksTest do
 
       assert [issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
       assert issue.message =~ "Do not use authorize?: false"
+    end
+
+    test "allows authorization bypasses inside Ash implementation modules" do
+      source = """
+      defmodule Sample.Check do
+        use Ash.Policy.SimpleCheck
+
+        def match?(_actor, _context, _opts) do
+          Ash.get(Resource, "id", authorize?: false)
+          true
+        end
+      end
+      """
+
+      assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
     end
   end
 
