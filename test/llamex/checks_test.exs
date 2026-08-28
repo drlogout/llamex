@@ -4,6 +4,21 @@ defmodule Llamex.ChecksTest do
   alias Credo.SourceFile
   alias Llamex.Credo.AddChecks
 
+  @authorization_implementation_behaviours [
+    "Ash.Policy.Check",
+    "Ash.Policy.FilterCheck",
+    "Ash.Policy.SimpleCheck",
+    "Ash.Resource.Actions.Implementation",
+    "Ash.Resource.Calculation",
+    "Ash.Resource.Change",
+    "Ash.Resource.ManualCreate",
+    "Ash.Resource.ManualDestroy",
+    "Ash.Resource.ManualRead",
+    "Ash.Resource.ManualUpdate",
+    "Ash.Resource.Preparation",
+    "Ash.Resource.Validation"
+  ]
+
   test "exposes the shipped check modules" do
     assert Llamex.checks() == [
              Llamex.Check.NoOneLiners,
@@ -595,9 +610,42 @@ defmodule Llamex.ChecksTest do
       assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
     end
 
-    test "allows per-record reduction after an Ash read" do
+    test "flags whole-dataset aggregation with Enum.reduce" do
       source = """
       defmodule Sample do
+        def total_cost do
+          Helpdesk.Support.list_all_tickets!()
+          |> Enum.reduce(0, fn ticket, total -> ticket.cost + total end)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoDBWorkInMemory, source)
+      assert issue.message =~ "Do not operate on the whole dataset in memory"
+    end
+
+    test "flags early whole-dataset aggregation with Enum.reduce_while" do
+      source = """
+      defmodule Sample do
+        def total_until_limit do
+          Helpdesk.Support.list_all_tickets!()
+          |> Enum.reduce_while(0, fn ticket, total ->
+            next = ticket.cost + total
+            if next > 100, do: {:halt, next}, else: {:cont, next}
+          end)
+        end
+      end
+      """
+
+      assert [issue] = issues(Llamex.Check.NoDBWorkInMemory, source)
+      assert issue.message =~ "Do not operate on the whole dataset in memory"
+    end
+
+    test "allows reviewed per-record reduction through the explicit opt-out" do
+      source = """
+      defmodule Sample do
+        @llamex_db_work_in_memory_allowed true
+
         def repair_all do
           Helpdesk.Support.list_all_tickets!()
           |> Enum.reduce(%{repaired: 0}, &repair_one/2)
@@ -606,6 +654,9 @@ defmodule Llamex.ChecksTest do
       """
 
       assert [] = issues(Llamex.Check.NoDBWorkInMemory, source)
+
+      without_opt_out = String.replace(source, "@llamex_db_work_in_memory_allowed true\n", "")
+      assert [_issue] = issues(Llamex.Check.NoDBWorkInMemory, without_opt_out)
     end
   end
 
@@ -725,19 +776,65 @@ defmodule Llamex.ChecksTest do
       assert issue.message =~ "Do not use authorize?: false"
     end
 
-    test "allows authorization bypasses inside Ash implementation modules" do
+    test "flags authorization bypasses in Ash.Domain modules" do
       source = """
-      defmodule Sample.Check do
-        use Ash.Policy.SimpleCheck
+      defmodule Sample.Domain do
+        use Ash.Domain
 
-        def match?(_actor, _context, _opts) do
-          Ash.get(Resource, "id", authorize?: false)
-          true
+        def unsafe(id) do
+          Ash.get!(Resource, id, authorize?: false)
         end
       end
       """
 
-      assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      assert [_issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "flags authorization bypasses in Ash.Resource modules" do
+      source = """
+      defmodule Sample.Resource do
+        use Ash.Resource
+
+        def unsafe(id) do
+          Ash.get!(OtherResource, id, authorize?: false)
+        end
+      end
+      """
+
+      assert [_issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    test "does not let an Ash sibling module exempt an ordinary module" do
+      source = """
+      defmodule Sample.Check do
+        use Ash.Policy.SimpleCheck
+        def match?(_actor, _context, _opts), do: true
+      end
+
+      defmodule Sample.Service do
+        def unsafe(id), do: Ash.get!(Resource, id, authorize?: false)
+      end
+      """
+
+      assert [_issue] = issues(Llamex.Check.NoAuthorizeBypass, source)
+    end
+
+    for behaviour <- @authorization_implementation_behaviours do
+      test "allows authorization bypasses inside #{behaviour} modules" do
+        behaviour = unquote(behaviour)
+
+        source = """
+        defmodule Sample.Implementation do
+          use #{behaviour}
+
+          def internal(id) do
+            Ash.get!(Resource, id, authorize?: false)
+          end
+        end
+        """
+
+        assert [] = issues(Llamex.Check.NoAuthorizeBypass, source)
+      end
     end
   end
 

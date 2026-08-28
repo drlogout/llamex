@@ -9,14 +9,13 @@ defmodule Llamex.Check.NoAuthorizeBypass do
     param_defaults: [skip_tests: true],
     explanations: [
       check: """
-      Ash actions must receive the actor that started the call. System-initiated
-      actions (Oban jobs, seeds, migrations) must pass `actor: %{system: :name}`
-      or a system actor instead of `authorize?: false`.
+      Calls outside an Ash implementation must receive the actor that started the
+      operation. System-initiated calls must pass a named system actor instead of
+      `authorize?: false`.
 
-       This check flags calls outside Ash implementation modules that pass
-       `authorize?: false` as a keyword option. Resource action implementations,
-       changes, preparations and policy checks are already inside an Ash-managed
-       authorization boundary and are excluded.
+      This check flags calls outside documented Ash implementation modules that
+      pass `authorize?: false` as a keyword option. Exemptions apply only to the
+      module containing the call, not to sibling modules in the same file.
 
       Remove `authorize?: false` and pass the real actor. For system-initiated
       actions, pass `actor: %{system: :job_name}` or a similar system marker.
@@ -38,17 +37,17 @@ defmodule Llamex.Check.NoAuthorizeBypass do
       []
     else
       ast = AST.ast(source_file)
+      issue_meta = IssueMeta.for(source_file, params)
 
-      if Ash.ash_implementation_module?(ast) do
-        []
-      else
-        AST.walk(ast, &authorize_bypass_issue(&1, IssueMeta.for(source_file, params)))
-      end
+      AST.walk_with_ancestors(ast, &authorize_bypass_issue(&1, &2, issue_meta))
     end
   end
 
-  defp authorize_bypass_issue(node, issue_meta) do
-    if Ash.authorize_false?(node) do
+  defp authorize_bypass_issue(node, ancestors, issue_meta) do
+    module_uses = AST.enclosing_module_uses(ancestors)
+
+    if Ash.authorize_false?(node) and
+         not Ash.authorization_implementation_module?(module_uses) do
       call = AST.call_identity(node)
 
       format_issue(issue_meta,

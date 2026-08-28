@@ -68,6 +68,13 @@ defmodule Llamex.Analysis.AST do
     end)
   end
 
+  def enclosing_module_uses(ancestors) when is_list(ancestors) do
+    Enum.find_value(ancestors, [], fn
+      {:defmodule, _, [_module, body]} -> direct_module_uses(body)
+      _ -> nil
+    end)
+  end
+
   def aliases(ast) do
     walk(ast, fn
       {:alias, _meta, [{:__aliases__, _, parts}]} ->
@@ -186,6 +193,8 @@ defmodule Llamex.Analysis.AST do
           :group_by,
           :map,
           :reject,
+          :reduce,
+          :reduce_while,
           :sort,
           :sort_by,
           :take,
@@ -238,6 +247,18 @@ defmodule Llamex.Analysis.AST do
   end
 
   def resolve_alias(module, _aliases), do: module
+
+  defp direct_module_uses(body) when is_list(body) do
+    body
+    |> Keyword.get(:do)
+    |> block_expressions()
+    |> Enum.flat_map(fn
+      {:use, _, [module | _args]} -> [alias_to_string(module)]
+      _ -> []
+    end)
+  end
+
+  defp direct_module_uses(_body), do: []
 
   defp function_tuple(kind, meta, head, body) do
     %{

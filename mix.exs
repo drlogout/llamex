@@ -24,8 +24,7 @@ defmodule Llamex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, "~> 1.7"},
-      {:ash, ">= 3.31.3 and < 4.0.0", optional: true}
+      {:credo, "~> 1.7"}
     ]
   end
 

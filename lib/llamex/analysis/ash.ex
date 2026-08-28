@@ -31,6 +31,21 @@ defmodule Llamex.Analysis.Ash do
     :load!
   ]
 
+  @authorization_implementation_modules [
+    "Ash.Policy.Check",
+    "Ash.Policy.FilterCheck",
+    "Ash.Policy.SimpleCheck",
+    "Ash.Resource.Actions.Implementation",
+    "Ash.Resource.Calculation",
+    "Ash.Resource.Change",
+    "Ash.Resource.ManualCreate",
+    "Ash.Resource.ManualDestroy",
+    "Ash.Resource.ManualRead",
+    "Ash.Resource.ManualUpdate",
+    "Ash.Resource.Preparation",
+    "Ash.Resource.Validation"
+  ]
+
   # Pagination options (:page, :limit, :offset) are deliberately not
   # listed: passing a page window at call time is Ash's designed
   # pagination API, not ad-hoc query shaping.
@@ -74,6 +89,10 @@ defmodule Llamex.Analysis.Ash do
       _ ->
         false
     end
+  end
+
+  def authorization_implementation_module?(module_uses) when is_list(module_uses) do
+    Enum.any?(module_uses, &(&1 in @authorization_implementation_modules))
   end
 
   def domain_interface_with_ad_hoc_options?(node) do
