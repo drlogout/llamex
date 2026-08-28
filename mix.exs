@@ -25,7 +25,7 @@ defmodule Llamex.MixProject do
   defp deps do
     [
       {:credo, "~> 1.7"},
-      {:ash, "~> 3.29", optional: true}
+      {:ash, ">= 3.31.3 and < 4.0.0", optional: true}
     ]
   end
 
